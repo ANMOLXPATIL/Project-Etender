@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import {
-  ArrowDownRight, ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock3,
+  ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock3,
   FilePlus2, HardHat, LoaderCircle, LockKeyhole, LogOut, Pencil, Plus, RefreshCw,
   Search, ShieldCheck, Trash2, Upload, X,
 } from 'lucide-react'
@@ -60,7 +60,7 @@ function SetupRequired() {
   return (
     <main className="setup-screen">
       <div className="setup-card">
-        <p className="eyebrow">GROUNDWORK / LOCAL SETUP</p>
+        <p className="eyebrow">GROUNDWORK / CLOUD CONNECTION</p>
         <h1>A real database,<br />not a demo fixture.</h1>
         <p>This workspace has no Supabase credentials configured. Groundwork deliberately does not fall back to mock data: profiles and edits only appear when connected to your Supabase cloud project.</p>
         <ol>
@@ -137,19 +137,27 @@ function DiscoveryPage() {
 
   return (
     <>
-      <section className="hero editorial-lines">
-        <div className="hero-kicker"><span>THE CONTRACTOR DIRECTORY</span><span>01 — DISCOVERY</span></div>
-        <h1>Good work<br />starts <em>here.</em></h1>
-        <div className="hero-bottom">
-          <p>Find experienced local professionals, understand what they do best, and choose with confidence—not on price alone.</p>
-          <a href="#directory" className="circle-link" aria-label="Explore the contractor directory"><ArrowDownRight size={22} /></a>
+      <section className="hero page-wrap">
+        <div className="hero-copy">
+          <p className="hero-kicker"><span className="hero-kicker-mark" /> A better way to build</p>
+          <h1>Make your next<br />project <em>feel right.</em></h1>
+          <p className="hero-description">Meet skilled local contractors, explore the work they’re proud of, and find the right fit for your home.</p>
+          <div className="hero-actions">
+            <a href="#directory" className="button button-primary">Find a contractor <ArrowRight size={16} /></a>
+            <Link className="hero-secondary-link" to="/sign-in">I’m a contractor <ArrowRight size={15} /></Link>
+          </div>
+          <div className="hero-proof"><ShieldCheck size={18} /><span>Compare experience, specialties, and real project work.</span></div>
         </div>
-        <div className="hero-index mono-note">BUILD WITH BETTER INFORMATION</div>
+        <div className="hero-visual">
+          <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=85" alt="Sunlit modern home opening onto a garden" />
+          <div className="hero-image-caption"><span>THE RIGHT PEOPLE. THE RIGHT PLAN.</span><span>01 / 03</span></div>
+          <div className="hero-floating-card"><span className="floating-card-icon"><HardHat size={18} /></span><span><strong>Built around your project</strong><small>Find people who know your kind of work.</small></span><ArrowRight size={17} /></div>
+        </div>
       </section>
 
       <section className="directory-section page-wrap" id="directory">
         <div className="section-heading">
-          <div><p className="eyebrow">THE DIRECTORY</p><h2>Find your fit.</h2></div>
+          <div><p className="eyebrow">GOOD PEOPLE, GREAT WORK</p><h2>Find your fit.</h2><p className="section-intro">Get to know the people behind the projects before you make a call.</p></div>
           <p className="result-count mono-note">{loading ? 'SEARCHING…' : `${contractors.length.toString().padStart(2, '0')} CONTRACTORS`}</p>
         </div>
         <div className="search-panel">
