@@ -34,7 +34,7 @@ function App() {
       document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ behavior: 'smooth' })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [location.pathname, location.hash])
+  }, [location.key, location.pathname, location.hash])
 
   useEffect(() => {
     if (!supabase) return
