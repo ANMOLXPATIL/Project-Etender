@@ -108,7 +108,6 @@ function SiteHeader({ session }: { session: Session | null }) {
 }
 
 function DiscoveryPage() {
-  const [query, setQuery] = useState('')
   const [skill, setSkill] = useState('')
   const [location, setLocation] = useState('')
   const [availability, setAvailability] = useState('')
@@ -120,7 +119,7 @@ function DiscoveryPage() {
     let active = true
     setLoading(true)
     const timeout = window.setTimeout(() => {
-      void listContractors({ query, skill, location, availability }).then((rows) => {
+      void listContractors({ skill, location, availability }).then((rows) => {
         if (active) {
           setContractors(rows)
           setError('')
@@ -128,12 +127,12 @@ function DiscoveryPage() {
       }).catch((caught: unknown) => {
         if (active) setError(caught instanceof Error ? caught.message : 'Could not load contractor listings.')
       }).finally(() => { if (active) setLoading(false) })
-    }, query || skill || location || availability ? 160 : 0)
+    }, skill || location || availability ? 160 : 0)
     return () => {
       active = false
       window.clearTimeout(timeout)
     }
-  }, [query, skill, location, availability])
+  }, [skill, location, availability])
 
   return (
     <>
@@ -161,7 +160,6 @@ function DiscoveryPage() {
           <p className="result-count mono-note">{loading ? 'SEARCHING…' : `${contractors.length.toString().padStart(2, '0')} CONTRACTORS`}</p>
         </div>
         <div className="search-panel">
-          <label className="search-field"><span>NAME OR BUSINESS</span><span className="input-icon"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try Northline Build Co." /></span></label>
           <label className="search-field"><span>SKILL / SPECIALTY</span><input value={skill} onChange={(event) => setSkill(event.target.value)} placeholder="e.g. finish carpentry" /></label>
           <label className="search-field"><span>SERVICE LOCATION</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or neighborhood" /></label>
           <label className="search-field"><span>AVAILABILITY</span><span className="select-wrap"><select value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">Any schedule</option><option value="available">Available</option><option value="limited">Limited availability</option><option value="unavailable">Fully booked</option></select><ChevronDown size={15} /></span></label>

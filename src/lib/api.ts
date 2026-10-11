@@ -23,7 +23,6 @@ function assertRpcSuccess(data: RpcResult[] | null, error: { message: string } |
 }
 
 export async function listContractors(filters: {
-  query?: string
   skill?: string
   location?: string
   availability?: string
@@ -46,7 +45,6 @@ export async function listContractors(filters: {
   if (constraints.length > 0 && narrowedIds.length === 0) return []
 
   let query = db.from('contractor_listings').select('*').order('updated_at', { ascending: false })
-  if (filters.query?.trim()) query = query.ilike('business_name', `%${filters.query.trim()}%`)
   if (filters.location?.trim()) query = query.ilike('service_location', `%${filters.location.trim()}%`)
   if (constraints.length > 0) query = query.in('id', narrowedIds)
   const { data, error } = await query.returns<Contractor[]>()

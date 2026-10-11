@@ -105,9 +105,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .search-field > span:first-child { color: #78837b; font-size: 9px; letter-spacing: .07em; }
 .search-field input, .search-field select { width: 100%; min-width: 0; height: 46px; padding: 10px 12px; border: 1px solid #e4e9e2; border-radius: 10px; color: var(--ink); background: #f8f9f6; font-family: inherit; font-size: 12px; }
 .search-field input::placeholder { color: #9aa49c; }
-.input-icon { display: flex; align-items: center; gap: 8px; padding-left: 11px; border: 1px solid #e4e9e2; border-radius: 10px; background: #f8f9f6; }
-.input-icon > svg { flex: 0 0 auto; color: #748d66; }
-.input-icon input { padding-left: 0; border: 0; background: transparent; }
 .select-wrap { position: relative; display: block; }
 .select-wrap select { appearance: none; padding-right: 32px; }
 .select-wrap > svg { position: absolute; right: 11px; top: 15px; pointer-events: none; color: #718076; }
@@ -344,7 +341,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .search-panel { gap: 12px 9px; padding: 12px; }
   .search-field > span:first-child { font-size: 8px; }
   .search-field input, .search-field select { height: 43px; padding-inline: 9px; font-size: 11px; }
-  .input-icon { padding-left: 8px; }
   .contractor-grid { grid-template-columns: 1fr; gap: 12px; padding-top: 14px; }
   .contractor-card { min-height: 268px; padding: 19px; }
   .black-band-inner { padding-block: 58px 62px; }
