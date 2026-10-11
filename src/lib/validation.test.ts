@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateImage, validateProject } from './validation'
+import { validateImage, validateProject, validateQuoteRequest } from './validation'
 
 describe('portfolio input validation', () => {
   it('accepts a valid completed project with an optional value', () => {
@@ -9,6 +9,26 @@ describe('portfolio input validation', () => {
       description: 'A complete kitchen refit.',
       projectValue: '28000',
     })).toBeNull()
+  })
+
+  describe('quote request validation', () => {
+    const validRequest = {
+      customerName: 'Jordan Lee',
+      customerEmail: 'jordan@example.com',
+      customerPhone: '555-0100',
+      projectType: 'Kitchen renovation',
+      projectLocation: 'Pune, Maharashtra',
+      projectDescription: 'I would like to renovate a small kitchen this spring.',
+    }
+
+    it('accepts a complete customer enquiry', () => {
+      expect(validateQuoteRequest(validRequest)).toBeNull()
+    })
+
+    it('rejects invalid contact information and incomplete project details', () => {
+      expect(validateQuoteRequest({ ...validRequest, customerEmail: 'not-an-email' })).toMatch(/valid email/)
+      expect(validateQuoteRequest({ ...validRequest, projectDescription: 'Help please' })).toMatch(/20–2,000/)
+    })
   })
 
   it('rejects short required fields, oversized text, and negative values', () => {

@@ -1,26 +1,40 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock3,
-  FilePlus2, HardHat, LoaderCircle, LockKeyhole, LogOut, Pencil, Plus, RefreshCw,
-  Search, ShieldCheck, Trash2, Upload, X,
+  ClipboardList, FilePlus2, HardHat, LoaderCircle, LockKeyhole, LogOut, Pencil, Plus, RefreshCw,
+  Search, Send, ShieldCheck, Trash2, Upload, X,
 } from 'lucide-react'
 import {
-  addSkill, deleteProject, getOwnContractorId, listContractors, ownsContractor, projectImageUrl, removeProjectImage,
-  removeSkill, renameSkill, saveAvailability, saveBasics, saveExperience, saveProject,
-  uploadProjectImage,
+  addSkill, deleteProject, getCustomerQuote, getMyAccountType, getOwnContractorId, listContractorQuotes,
+  listContractors, listMyQuoteRequests,
+  ownsContractor, projectImageUrl, removeProjectImage, removeQuoteImages, removeSkill, renameSkill, saveAvailability,
+  saveBasics, saveContractorQuote, saveExperience, saveProject, submitQuoteRequest, uploadProjectImage, uploadQuoteImages,
 } from './lib/api'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { validateImage, validateProject } from './lib/validation'
+import { validateImage, validateProject, validateQuoteRequest } from './lib/validation'
 import { useContractor } from './lib/useContractor'
 import type {
-  AvailabilityStatus, Contractor, ContractorDetail, ContractorSkill, PortfolioProject, ProjectInput, ProjectStatus,
+  AccountType, AvailabilityStatus, Contractor, ContractorDetail, ContractorSkill, CustomerQuote, PortfolioProject,
+  ProjectInput, ProjectStatus, QuoteRequest, QuoteStatus,
 } from './types'
 
 function App() {
+  const location = useLocation()
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+
+  useEffect(() => {
+    if (!location.hash) {
+      window.scrollTo(0, 0)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.pathname, location.hash])
 
   useEffect(() => {
     if (!supabase) return
@@ -47,6 +61,8 @@ function App() {
           <Route path="/sign-in" element={<AuthPage session={session} />} />
           <Route path="/contractors/:id" element={<ContractorPage session={session} />} />
           <Route path="/manage/:id" element={<ManagePage session={session} />} />
+          <Route path="/my-quotes" element={<MyQuotesPage session={session} />} />
+          <Route path="/quotes/:token" element={<CustomerQuotePage />} />
           <Route path="/demo/:id" element={<DemoPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -84,6 +100,7 @@ function SiteHeader({ session }: { session: Session | null }) {
     if (error) setSignOutError(error.message)
     else { setSignOutError(''); navigate('/') }
   }
+  const accountType = session?.user.user_metadata.account_type === 'customer' ? 'customer' : 'contractor'
   return (
     <header className="site-header">
       <Link to="/" className="brand" aria-label="Groundwork home">
@@ -91,8 +108,9 @@ function SiteHeader({ session }: { session: Session | null }) {
         <span>GROUNDWORK<span className="brand-dot">.</span></span>
       </Link>
       <nav className="main-nav" aria-label="Main navigation">
-        <Link to="/">Find a contractor</Link>
-        {session && <Link to="/manage/me">Manage profile</Link>}
+        <Link to="/#directory">Find a contractor</Link>
+        {session && accountType === 'customer' && <Link to="/my-quotes">My quote requests</Link>}
+        {session && accountType === 'contractor' && <Link to="/manage/me">Manage profile</Link>}
       </nav>
       <div className="header-account">
         {session ? (
@@ -100,7 +118,7 @@ function SiteHeader({ session }: { session: Session | null }) {
             <span className="signed-in mono-note">{session.user.email}</span>
             <button className="icon-button" onClick={() => void signOut()} aria-label="Sign out" title="Sign out"><LogOut size={17} /></button>
           </>
-        ) : <Link className="nav-signin" to="/sign-in"><LockKeyhole size={14} /> Contractor sign in</Link>}
+        ) : <Link className="nav-signin" to="/sign-in"><LockKeyhole size={14} /> Log in</Link>}
       </div>
       {signOutError && <p role="alert" className="header-error">{signOutError}</p>}
     </header>
@@ -142,8 +160,8 @@ function DiscoveryPage() {
           <h1>Make your next<br />project <em>feel right.</em></h1>
           <p className="hero-description">Meet skilled local contractors, explore the work they’re proud of, and find the right fit for your home.</p>
           <div className="hero-actions">
-            <a href="#directory" className="button button-primary">Find a contractor <ArrowRight size={16} /></a>
-            <Link className="hero-secondary-link" to="/sign-in">I’m a contractor <ArrowRight size={15} /></Link>
+            <Link to="/#directory" className="button button-primary">Find a contractor <ArrowRight size={16} /></Link>
+            <Link className="hero-secondary-link" to="/sign-in?account=contractor">I’m a contractor <ArrowRight size={15} /></Link>
           </div>
           <div className="hero-proof"><ShieldCheck size={18} /><span>Compare experience, specialties, and real project work.</span></div>
         </div>
@@ -156,13 +174,18 @@ function DiscoveryPage() {
 
       <section className="directory-section page-wrap" id="directory">
         <div className="section-heading">
-          <div><p className="eyebrow">GOOD PEOPLE, GREAT WORK</p><h2>Find your fit.</h2><p className="section-intro">Get to know the people behind the projects before you make a call.</p></div>
-          <p className="result-count mono-note">{loading ? 'SEARCHING…' : `${contractors.length.toString().padStart(2, '0')} CONTRACTORS`}</p>
+          <div><p className="eyebrow">YOUR PROJECT STARTS WITH THE RIGHT PEOPLE</p><h2>Find a contractor<br />who gets your vision.</h2><p className="section-intro">Discover skilled professionals across India. Compare real work, then share your project brief and request a quote.</p></div>
+          <p className="result-count mono-note">{loading ? 'UPDATING MATCHES…' : `${contractors.length.toString().padStart(2, '0')} MATCHING PROS`}</p>
         </div>
-        <div className="search-panel">
-          <label className="search-field"><span>SKILL / SPECIALTY</span><input value={skill} onChange={(event) => setSkill(event.target.value)} placeholder="e.g. finish carpentry" /></label>
-          <label className="search-field"><span>SERVICE LOCATION</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or neighborhood" /></label>
-          <label className="search-field"><span>AVAILABILITY</span><span className="select-wrap"><select value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">Any schedule</option><option value="available">Available</option><option value="limited">Limited availability</option><option value="unavailable">Fully booked</option></select><ChevronDown size={15} /></span></label>
+        <div className="search-feature">
+          <div className="search-feature-heading"><div><span className="search-feature-icon"><Search size={18} /></span><span><strong>What are you planning?</strong><small>Choose a specialty, area, or availability to find your match.</small></span></div><span className="search-india-badge">BUILT AROUND INDIA</span></div>
+          <div className="search-panel">
+            <label className="search-field"><span>WHAT WORK DO YOU NEED?</span><input value={skill} onChange={(event) => setSkill(event.target.value)} placeholder="e.g. kitchen renovation, painting" /></label>
+            <label className="search-field"><span>WHERE IS THE PROJECT?</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, area or PIN code" /></label>
+            <label className="search-field"><span>CONTRACTOR AVAILABILITY</span><span className="select-wrap"><select value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">Any schedule</option><option value="available">Available now</option><option value="limited">Limited availability</option><option value="unavailable">Fully booked</option></select><ChevronDown size={15} /></span></label>
+          </div>
+          <div className="search-suggestions"><span>POPULAR:</span>{['Home renovation', 'Modular kitchen', 'Painting', 'Plumbing'].map((item) => <button type="button" key={item} onClick={() => setSkill(item)}>{item}</button>)}</div>
+          {(skill || location || availability) && <button className="search-clear" type="button" onClick={() => { setSkill(''); setLocation(''); setAvailability('') }}>Clear filters <X size={13} /></button>}
         </div>
         {error && <Notice kind="error">{error}</Notice>}
         <div className="contractor-grid" aria-live="polite">
@@ -174,15 +197,15 @@ function DiscoveryPage() {
       <section className="black-band">
         <div className="black-band-inner page-wrap">
           <p className="eyebrow">FOR THE PEOPLE DOING THE WORK</p>
-          <h2>Your next project<br />shouldn't erase<br /><em>your last one.</em></h2>
-          <p className="band-copy">Update availability, skills, qualifications, and individual projects on their own. Your profile stays intact while the work keeps moving.</p>
+          <h2>Let your work<br />do the talking<br /><em>for you.</em></h2>
+          <p className="band-copy">Showcase real projects with photos, highlight your specialties, and receive detailed enquiries from homeowners ready to get started.</p>
           <Link className="button button-inverse" to="/sign-in">Manage your profile <ArrowRight size={16} /></Link>
         </div>
       </section>
       <section className="page-wrap update-callout">
         <span className="callout-rule" />
-        <div><p className="eyebrow">BUILT FOR MORE THAN ONE SESSION</p><h2>Updates that don't<br />overwrite each other.</h2></div>
-        <p>Independent sections save independently. If another session changes the same section first, Groundwork catches the stale edit and gives you a chance to refresh.</p>
+        <div><p className="eyebrow">A CLEARER WAY TO GET STARTED</p><h2>From project idea<br />to a useful quote.</h2></div>
+        <p>Explore a contractor’s work, share your project scope and timing, then keep your private link to review their estimate and next steps.</p>
       </section>
     </>
   )
@@ -205,9 +228,11 @@ function ContractorCard({ contractor, index }: { contractor: Contractor; index: 
     })
     return () => { active = false }
   }, [contractor.id])
+  const image = projectImageUrl(contractor.featured_image_path)
   return (
     <article className="contractor-card">
-      <div className="card-topline"><span className="mono-note">PROFILE / {String(index + 1).padStart(2, '0')}</span><span className="card-arrow"><ArrowUpRight /></span></div>
+      {image && <Link className="contractor-card-image" to={`/contractors/${contractor.id}`} tabIndex={-1} aria-hidden="true"><img src={image} alt="" loading="lazy" /></Link>}
+      <div className="card-topline"><span className="mono-note">LOCAL PROFESSIONAL / {String(index + 1).padStart(2, '0')}</span></div>
       <h3><Link to={`/contractors/${contractor.id}`}>{contractor.business_name}</Link></h3>
       <p className="card-location">{contractor.service_location || 'Service area on request'}</p>
       <p className="card-description">{contractor.description || 'A local contractor ready to share more about their work.'}</p>
@@ -217,7 +242,295 @@ function ContractorCard({ contractor, index }: { contractor: Contractor; index: 
   )
 }
 
-function ArrowUpRight() { return <ArrowRight size={16} className="arrow-up-right" /> }
+function QuoteRequestForm({ contractor, session }: { contractor: Contractor; session: Session | null }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const draftKey = `quote-draft:${contractor.id}`
+  const emptyFields = {
+    customerName: '', customerEmail: '', customerPhone: '', projectType: '',
+    projectLocation: '', projectDescription: '', budgetRange: '', timeline: '',
+  }
+  const [fields, setFields] = useState(() => {
+    const saved = sessionStorage.getItem(draftKey)
+    if (!saved) return emptyFields
+    try { return { ...emptyFields, ...JSON.parse(saved) as Partial<typeof emptyFields> } }
+    catch { sessionStorage.removeItem(draftKey); return emptyFields }
+  })
+  const [files, setFiles] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
+  const [pendingPhotos, setPendingPhotos] = useState(() => sessionStorage.getItem(`${draftKey}:photos`) === 'pending')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const urls = files.map((file) => URL.createObjectURL(file))
+    setPreviews(urls)
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [files])
+
+  useEffect(() => {
+    if (!session || session.user.user_metadata.account_type !== 'customer') return
+    setFields((current: typeof emptyFields) => ({
+      ...current,
+      customerName: current.customerName || session.user.user_metadata.full_name || '',
+      customerEmail: current.customerEmail || session.user.email || '',
+    }))
+  }, [session])
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!session || session.user.user_metadata.account_type !== 'customer') {
+      sessionStorage.setItem(draftKey, JSON.stringify(fields))
+      if (files.length) sessionStorage.setItem(`${draftKey}:photos`, 'pending')
+      const from = `${location.pathname}#request-quote`
+      if (session) {
+        if (!supabase) { setError('Authentication is not available. Please try again.'); return }
+        const { error: signOutError } = await supabase.auth.signOut()
+        if (signOutError) { setError(signOutError.message); return }
+      }
+      navigate(`/sign-in?account=customer&from=${encodeURIComponent(from)}`)
+      return
+    }
+    const requestFields = { ...fields, customerEmail: session.user.email ?? fields.customerEmail }
+    const issue = validateQuoteRequest(requestFields)
+    if (issue) { setError(issue); return }
+    if (!session.user.email) { setError('Your customer account needs an email address to send a quote request.'); return }
+    setBusy(true)
+    setError('')
+    const accessToken = crypto.randomUUID()
+    let uploadedPaths: string[] = []
+    try {
+      uploadedPaths = files.length ? await uploadQuoteImages(session.user.id, files) : []
+      await submitQuoteRequest({
+        contractorId: contractor.id, accessToken, customerId: session.user.id,
+        ...fields, customerEmail: session.user.email, projectImagePaths: uploadedPaths,
+      })
+      sessionStorage.removeItem(draftKey)
+      sessionStorage.removeItem(`${draftKey}:photos`)
+      navigate('/my-quotes')
+    } catch (caught) {
+      if (uploadedPaths.length) {
+        try { await removeQuoteImages(uploadedPaths) }
+        catch (cleanupError) {
+          setError(`Quote request failed and the uploaded photos could not be cleaned up: ${cleanupError instanceof Error ? cleanupError.message : 'storage error'}`)
+          setBusy(false)
+          return
+        }
+      }
+      setError(caught instanceof Error ? caught.message : 'Your request could not be sent.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="quote-request-section" id="request-quote">
+      <div className="quote-request-copy">
+        <p className="eyebrow">START A CONVERSATION</p>
+        <h2>Tell {contractor.business_name} about your project.</h2>
+        <p>Share a few details to request an estimate. Track the contractor’s response in My quote requests.</p>
+      </div>
+      <form className="quote-form" onSubmit={(event) => void submit(event)}>
+        <div className="form-pair">
+          <label>Your name<input required minLength={2} maxLength={120} autoComplete="name" value={fields.customerName} onChange={(event) => setFields({ ...fields, customerName: event.target.value })} /></label>
+          <label>Email address<input type="email" required maxLength={254} autoComplete="email" value={session?.user.email ?? fields.customerEmail} onChange={(event) => setFields({ ...fields, customerEmail: event.target.value })} disabled={session?.user.user_metadata.account_type === 'customer'} /></label>
+        </div>
+        <div className="form-pair">
+          <label>Phone (optional)<input type="tel" maxLength={40} autoComplete="tel" value={fields.customerPhone} onChange={(event) => setFields({ ...fields, customerPhone: event.target.value })} /></label>
+          <label>What work do you need?<input required minLength={2} maxLength={100} placeholder="e.g. Kitchen renovation" value={fields.projectType} onChange={(event) => setFields({ ...fields, projectType: event.target.value })} /></label>
+        </div>
+        <div className="form-pair">
+          <label>Project location<input maxLength={160} autoComplete="street-address" placeholder="e.g. Pune, Maharashtra" value={fields.projectLocation} onChange={(event) => setFields({ ...fields, projectLocation: event.target.value })} /></label>
+          <label>Estimated budget
+            <select value={fields.budgetRange} onChange={(event) => setFields({ ...fields, budgetRange: event.target.value })}>
+              <option value="">Not sure yet</option><option>Under ₹50,000</option><option>₹50,000–₹2 lakh</option>
+              <option>₹2–₹10 lakh</option><option>₹10 lakh+</option>
+            </select>
+          </label>
+        </div>
+        <label>When would you like to start?
+          <select value={fields.timeline} onChange={(event) => setFields({ ...fields, timeline: event.target.value })}>
+            <option value="">Flexible</option><option>As soon as possible</option><option>Within 1–3 months</option>
+            <option>Within 3–6 months</option><option>Just planning</option>
+          </select>
+        </label>
+        <label>How do you want it done?<textarea required minLength={20} maxLength={2000} rows={5} placeholder="Describe the scope, materials, finish, measurements, and anything else the contractor should know." value={fields.projectDescription} onChange={(event) => setFields({ ...fields, projectDescription: event.target.value })} /></label>
+        {pendingPhotos && <Notice kind="success">Your project details were saved while you signed in. Please reattach the photos you selected before logging in.</Notice>}
+        <label>Project photos (optional) <span className="field-private">JPG / PNG / WEBP · UP TO 3 PHOTOS · 5 MB EACH</span>
+          <span className="file-control"><Upload size={15} /><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => {
+            const selected = Array.from(event.target.files ?? [])
+            const next = [...files, ...selected]
+            if (next.length > 3) { setError('Attach no more than 3 photos.'); event.target.value = ''; return }
+            const issue = selected.map(validateImage).find(Boolean)
+            if (issue) { setError(issue); event.target.value = ''; return }
+            setFiles(next); setError(''); setPendingPhotos(false); sessionStorage.removeItem(`${draftKey}:photos`)
+          }} />{files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} selected` : 'Add photos of the space or inspiration'}</span>
+        </label>
+        {!!previews.length && <div className="quote-photo-previews">{previews.map((src, index) => <div key={src}><img src={src} alt={`Project attachment ${index + 1}`} /><button type="button" className="icon-button" aria-label={`Remove photo ${index + 1}`} onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X size={15} /></button></div>)}</div>}
+        {!session && <p className="quote-privacy">Sign in or create a customer account to send this request. Your project details will be saved while you log in.</p>}
+        {error && <Notice kind="error">{error}</Notice>}
+        <button className="button button-primary quote-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle size={15} className="spin" /> Sending…</> : !session || session.user.user_metadata.account_type !== 'customer' ? <><LockKeyhole size={15} /> Sign in to send quote</> : <>Send quote <Send size={15} /></>}</button>
+        <p className="quote-privacy">Your contact details are shared only with this contractor. Track their response under My quote requests.</p>
+      </form>
+    </section>
+  )
+}
+
+function CustomerQuotePage() {
+  const { token } = useParams()
+  const [request, setRequest] = useState<CustomerQuote | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  async function refresh() {
+    if (!token) { setError('This quote link is invalid.'); setLoading(false); return }
+    setLoading(true)
+    setError('')
+    try { setRequest(await getCustomerQuote(token)) }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'The quote request could not be loaded.') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void refresh() }, [token])
+
+  if (loading && !request) return <LoadingState label="Opening your quote request…" />
+  if (error && !request) return <ErrorPage message={error} />
+  if (!request) return <ErrorPage message="This quote request could not be found." />
+  return (
+    <div className="page-wrap quote-tracker-page">
+      <Link className="back-link" to={`/contractors/${request.contractor_id}`}><ArrowLeft size={15} /> Contractor profile</Link>
+      <div className="quote-tracker-card">
+        <p className="eyebrow">PRIVATE QUOTE TRACKER</p>
+        <h1>{request.status === 'new' ? 'Request sent.' : request.status === 'quoted' ? 'Your estimate is ready.' : 'An update on your project.'}</h1>
+        <p className="quote-tracker-intro">{request.contractor_name} · {request.project_type}</p>
+        <div className={`quote-status quote-status-${request.status}`}>{request.status === 'new' ? 'Awaiting contractor response' : request.status === 'quoted' ? 'Estimate received' : 'Contractor unavailable'}</div>
+        <div className="quote-summary"><strong>Your project</strong><p>{request.project_description}</p><span>{request.project_location || 'Location not provided'} · {request.timeline || 'Flexible timing'} · {request.budget_range || 'Budget not specified'}</span></div>
+        <QuotePhotos images={request.project_images ?? []} />
+        {request.status === 'quoted' && <div className="quote-response"><span>ESTIMATED PROJECT COST</span><strong>{formatRupees(request.quote_amount ?? 0)}</strong>{request.quote_message && <p>{request.quote_message}</p>}</div>}
+        {request.status === 'declined' && <div className="quote-response"><strong>This contractor cannot take on the project right now.</strong>{request.quote_message && <p>{request.quote_message}</p>}</div>}
+        {error && <Notice kind="error">{error}</Notice>}
+        <button className="button button-secondary" type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={15} /> {loading ? 'Refreshing…' : 'Refresh response'}</button>
+        <p className="quote-privacy">Keep this private link to check for updates. No email notification is sent when the contractor responds.</p>
+      </div>
+    </div>
+  )
+}
+
+function MyQuotesPage({ session }: { session: Session | null }) {
+  const [requests, setRequests] = useState<CustomerQuote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [accountType, setAccountType] = useState<AccountType | null>(null)
+
+  async function refresh() {
+    setLoading(true)
+    setError('')
+    try {
+      const type = await getMyAccountType()
+      setAccountType(type)
+      if (type !== 'customer') {
+        setRequests([])
+        return
+      }
+      setRequests(await listMyQuoteRequests())
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Your quote requests could not be loaded.')
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { void refresh() }, [session])
+
+  if (!session) return <Navigate to="/sign-in?account=customer&from=%2Fmy-quotes" replace />
+  if (loading) return <LoadingState label="Loading your quote requests…" />
+  if (accountType === 'contractor') return <ErrorPage message="This page is for customer accounts. Sign out and log in as a customer to see quote requests." />
+  return (
+    <div className="page-wrap my-quotes-page">
+      <div className="quote-inbox-heading"><div><p className="eyebrow">YOUR PROJECTS</p><h2>My quote requests</h2></div><button className="button button-secondary" type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={14} /> Refresh</button></div>
+      {error && <Notice kind="error">{error}</Notice>}
+      {!error && !requests.length ? <div className="empty-state"><ClipboardList size={23} /><h3>No quote requests yet.</h3><p>Explore contractor work and send a project enquiry when you’re ready.</p><Link className="button button-primary" to="/#directory">Find a contractor <ArrowRight size={15} /></Link></div> :
+        <div className="my-quotes-list">{requests.map((request) => <article className="my-quote-card" key={request.id}>
+          <div className="my-quote-heading"><div><span className={`quote-status quote-status-${request.status}`}>{request.status === 'new' ? 'Awaiting response' : request.status === 'quoted' ? 'Quote received' : 'Declined'}</span><h3>{request.project_type}</h3><Link to={`/contractors/${request.contractor_id}`}>{request.contractor_name} <ArrowRight size={13} /></Link></div><time>{formatDate(request.created_at)}</time></div>
+          <p>{request.project_description}</p>
+          <QuotePhotos images={request.project_images ?? []} />
+          {request.status === 'quoted' && <div className="quote-response"><span>ESTIMATED PROJECT COST</span><strong>{formatRupees(request.quote_amount ?? 0)}</strong>{request.quote_message && <p>{request.quote_message}</p>}</div>}
+          {request.status === 'declined' && request.quote_message && <p className="quote-decline-message">{request.quote_message}</p>}
+        </article>)}</div>}
+    </div>
+  )
+}
+
+function QuoteInbox({ contractorId }: { contractorId: string }) {
+  const [requests, setRequests] = useState<QuoteRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  async function refresh() {
+    setLoading(true)
+    setError('')
+    try { setRequests(await listContractorQuotes(contractorId)) }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Enquiries could not be loaded.') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void refresh() }, [contractorId])
+  return (
+    <section className="quote-inbox">
+      <div className="quote-inbox-heading"><div><p className="eyebrow">CUSTOMER ENQUIRIES</p><h2>Quote requests <span>{requests.length}</span></h2></div><button className="button button-secondary" type="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={14} /> Refresh</button></div>
+      {error && <Notice kind="error">{error}</Notice>}
+      {loading && !requests.length ? <div className="loading-row"><LoaderCircle className="spin" /> Loading enquiries…</div> :
+        requests.length ? <div className="quote-inbox-list">{requests.map((request) => <QuoteRequestRow key={request.id} request={request} onSaved={refresh} />)}</div> :
+          !error && <p className="quote-inbox-empty">No enquiries yet. Customer requests will appear here.</p>}
+    </section>
+  )
+}
+
+function QuoteRequestRow({ request, onSaved }: { request: QuoteRequest; onSaved: () => Promise<void> }) {
+  const [amount, setAmount] = useState(request.quote_amount === null ? '' : String(request.quote_amount))
+  const [message, setMessage] = useState(request.quote_message)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function save(nextStatus: Exclude<QuoteStatus, 'new'>) {
+    if (nextStatus === 'quoted' && (!amount.trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      setError('Enter a valid, non-negative estimate before sending a quote.')
+      return
+    }
+    const quoteAmount = nextStatus === 'quoted' ? Number(amount) : null
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await saveContractorQuote({ requestId: request.id, status: nextStatus, amount: quoteAmount, message })
+      await onSaved()
+      setNotice(nextStatus === 'quoted' ? 'Quotation saved. The customer can view it from their private link.' : 'Response saved.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Your response could not be saved.')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <article className="quote-request-card">
+      <div className="quote-request-card-heading"><div><span className={`quote-status quote-status-${request.status}`}>{request.status === 'new' ? 'New enquiry' : request.status === 'quoted' ? 'Quote sent' : 'Declined'}</span><h3>{request.project_type}</h3></div><time>{formatDate(request.created_at)}</time></div>
+      <p className="quote-project-description">{request.project_description}</p>
+      <QuotePhotos images={request.project_images ?? []} />
+      <div className="quote-request-meta"><span>{request.project_location || 'Location not provided'}</span><span>{request.timeline || 'Flexible timeline'}</span><span>{request.budget_range || 'Budget not specified'}</span></div>
+      <div className="quote-customer-contact"><strong>{request.customer_name}</strong><a href={`mailto:${request.customer_email}`}>{request.customer_email}</a>{request.customer_phone && <a href={`tel:${request.customer_phone}`}>{request.customer_phone}</a>}</div>
+      <div className="quote-reply-form">
+        <label>Estimate (₹)<input type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
+        <label>Response to customer<textarea rows={3} maxLength={2000} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Share what is included, next steps, or any questions." /></label>
+        <div className="quote-reply-actions"><button className="button button-primary" type="button" disabled={busy} onClick={() => void save('quoted')}>{busy ? 'Saving…' : <>{request.status === 'quoted' ? 'Update quote' : 'Send quotation'} <Send size={14} /></>}</button><button className="text-action" type="button" disabled={busy} onClick={() => void save('declined')}>Decline request</button></div>
+      </div>
+      {error && <Notice kind="error">{error}</Notice>}{notice && <Notice kind="success">{notice}</Notice>}
+    </article>
+  )
+}
+
+
+function QuotePhotos({ images }: { images: string[] }) {
+  if (!images.length) return null
+  return <div className="quote-photos">{images.map((src, index) => <a key={src} href={src} target="_blank" rel="noreferrer"><img src={src} alt={`Customer project reference ${index + 1}`} loading="lazy" /></a>)}</div>
+}
+
+function formatRupees(amount: number): string {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount)
+}
 
 function ContractorPage({ session }: { session: Session | null }) {
   const { id } = useParams()
@@ -245,7 +558,7 @@ function ContractorPage({ session }: { session: Session | null }) {
       <div className="detail-header">
         <div><p className="eyebrow">CONTRACTOR / {contractor.profile.id.slice(0, 8).toUpperCase()}</p><h1>{contractor.profile.business_name}</h1><p className="detail-location">{contractor.profile.service_location}</p></div>
         <div className="profile-actions">
-          <Link className="button button-secondary" to={`/demo/${contractor.profile.id}`}>Concurrency demo <ArrowRight size={15} /></Link>
+          <a className="button button-secondary" href="#request-quote"><ClipboardList size={15} /> Request a quote</a>
           {isOwner && <Link className="button button-primary" to={`/manage/${contractor.profile.id}`}><Pencil size={15} /> Edit profile</Link>}
         </div>
       </div>
@@ -265,6 +578,7 @@ function ContractorPage({ session }: { session: Session | null }) {
           {!session && <Link className="contact-link" to="/sign-in">Contractor? Manage your profile <ArrowRight size={14} /></Link>}
         </aside>
       </div>
+      <QuoteRequestForm contractor={contractor.profile} session={session} />
     </div>
   )
 }
@@ -272,6 +586,7 @@ function ContractorPage({ session }: { session: Session | null }) {
 function ManagePage({ session }: { session: Session | null }) {
   const { id } = useParams()
   if (!session) return <Navigate to="/sign-in" replace state={{ from: `/manage/${id}` }} />
+  if (session.user.user_metadata.account_type === 'customer') return <Navigate to="/my-quotes" replace />
   if (id === 'me') return <MyProfileRedirect />
   return <ManageForUser id={id} />
 }
@@ -395,12 +710,13 @@ function ManageForUser({ id }: { id: string | undefined }) {
     <div className="page-wrap manage-page">
       <Link className="back-link" to={`/contractors/${contractor.profile.id}`}><ArrowLeft size={15} /> View public profile</Link>
       <div className="manage-header">
-        <div><p className="eyebrow">PROFILE MANAGEMENT / PRIVATE WORKSPACE</p><h1>Keep the record<br /><em>current.</em></h1><p>Basic fields, experience, availability, skills, and portfolio records version independently. An edit to one field won't block a different field or project.</p></div>
+        <div><p className="eyebrow">PROFILE MANAGEMENT / PRIVATE WORKSPACE</p><h1>Build trust.<br /><em>Win better work.</em></h1><p>Keep your details and availability current, showcase your best project work, and respond to customer enquiries from one place.</p></div>
         <div className="version-card"><ShieldCheck size={21} /><span>PROFILE ID</span><strong>{contractor.profile.id.slice(0, 8).toUpperCase()}</strong><span>LAST UPDATED</span><strong>{formatDate(contractor.profile.updated_at)}</strong><span>SECTION VERSIONS</span><strong className="versions-line">B {contractor.profile.version} · E {contractor.experience.version} · A {contractor.availability.version}</strong></div>
       </div>
       <div className="sync-note"><span className={`sync-dot ${realtimeStatus === 'SUBSCRIBED' ? 'sync-live' : ''}`} /><span>{realtimeStatus === 'SUBSCRIBED' ? 'Cross-session updates are live.' : 'Cross-session updates are not connected; refresh to check saved data.'} This page keeps your unsaved drafts while saved data refreshes.</span><button onClick={() => void refreshAndReview()}><RefreshCw size={14} /> Refresh & review</button></div>
       {(notice || errorNotice) && <Notice kind={errorNotice ? 'error' : 'success'}>{errorNotice || notice}{errorNotice.includes('refresh') && <button className="notice-action" onClick={() => void refreshAndReview()}>Refresh values</button>}</Notice>}
 
+      <QuoteInbox contractorId={contractor.profile.id} />
       <div className="editor-grid">
         <SectionEditor title="Basic information" number="01" version={versions.basics} stale={isStaleBasics} busy={busy === 'basics'} onSave={() => saveSection('basics', async () => {
           const draftToSave = { ...basicDraft }
@@ -637,7 +953,7 @@ function ProjectsEditor({ contractor, onChange }: { contractor: ContractorDetail
             <label>Status <span className="select-wrap"><select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as ProjectStatus })}><option value="completed">Completed</option><option value="in_progress">In progress</option><option value="planned">Planned</option></select><ChevronDown size={15} /></span></label>
             <label>Completion date<input type="date" value={draft.completed_on ?? ''} onChange={(e) => setDraft({ ...draft, completed_on: e.target.value })} /></label>
           </div>
-          <div className="form-pair"><label>Project location<input maxLength={160} value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} /></label><label>Project value<input type="number" min="0" step="0.01" value={draft.project_value ?? ''} onChange={(e) => setDraft({ ...draft, project_value: e.target.value ? Number(e.target.value) : null })} /></label></div>
+          <div className="form-pair"><label>Project location<input maxLength={160} value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} /></label><label>Project value (₹)<input type="number" min="0" step="0.01" value={draft.project_value ?? ''} onChange={(e) => setDraft({ ...draft, project_value: e.target.value ? Number(e.target.value) : null })} /></label></div>
           <label>Optional image <span className="field-private">JPG / PNG / WEBP · 5 MB MAX</span><span className="file-control"><Upload size={15} /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => selectImage(e.target.files?.[0])} />{file?.name ?? (draft.image_path ? 'Current image attached' : 'Choose an image')}</span></label>
           {draft.image_path && !file && <button className="text-action" type="button" onClick={() => setDraft({ ...draft, image_path: null })}>Remove current image</button>}
         </div>
@@ -684,30 +1000,43 @@ function DemoStep({ number, title, body, icon }: { number: string; title: string
 
 function AuthPage({ session }: { session: Session | null }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedAccount = searchParams.get('account')
+  const returnTo = searchParams.get('from')
+  const safeReturnTo = returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : null
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [accountType, setAccountType] = useState<AccountType>(requestedAccount === 'customer' ? 'customer' : 'contractor')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [location, setLocation] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
-  if (session) return <Navigate to="/" replace />
+  if (session) return <Navigate to={safeReturnTo ?? (session.user.user_metadata.account_type === 'customer' ? '/my-quotes' : '/manage/me')} replace />
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!supabase) return
     setBusy(true); setError(''); setMessage('')
     try {
       if (mode === 'signin') {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
         if (authError) throw authError
-        navigate('/')
+        const actualAccount = data.user.user_metadata.account_type === 'customer' ? 'customer' : 'contractor'
+        if (actualAccount !== accountType) {
+          await supabase.auth.signOut()
+          throw new Error(`This account is registered as a ${actualAccount}. Choose “${actualAccount === 'customer' ? 'Customer' : 'Contractor'}” to log in.`)
+        }
+        navigate(safeReturnTo ?? (accountType === 'customer' ? '/my-quotes' : '/manage/me'), { replace: true })
       } else {
         const { data, error: authError } = await supabase.auth.signUp({
-          email, password, options: { data: { business_name: businessName.trim(), service_location: location.trim() } },
+          email, password, options: { data: accountType === 'contractor'
+            ? { account_type: accountType, business_name: businessName.trim(), service_location: location.trim() }
+            : { account_type: accountType, full_name: fullName.trim() } },
         })
         if (authError) throw authError
-        if (data.session) navigate('/manage/me')
+        if (data.session) navigate(safeReturnTo ?? (accountType === 'customer' ? '/my-quotes' : '/manage/me'), { replace: true })
         else setMessage('Check your email to confirm your account, then sign in.')
       }
     } catch (caught) {
@@ -716,15 +1045,22 @@ function AuthPage({ session }: { session: Session | null }) {
   }
   return (
     <div className="auth-page page-wrap">
-      <div className="auth-copy"><p className="eyebrow">CONTRACTOR WORKSPACE</p><h1>Keep good work<br /><em>on the record.</em></h1><p>Sign in to manage your public profile. Each section and portfolio project can be updated independently.</p><div className="auth-private"><LockKeyhole size={17} /> Private contact details stay visible only to you.</div></div>
+      <div className="auth-copy"><p className="eyebrow">GROUNDWORK / YOUR PROJECT STARTS HERE</p><h1>Good work begins<br /><em>with the right fit.</em></h1><p>Customers can find trusted local pros and request estimates. Contractors can showcase their work and manage new enquiries.</p><div className="auth-private"><LockKeyhole size={17} /> Choose how you want to use Groundwork.</div></div>
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        <p className="auth-role-label">CONTINUE AS</p>
+        <div className="auth-role-switch">
+          <button type="button" className={accountType === 'customer' ? 'active' : ''} onClick={() => { setAccountType('customer'); setError(''); setMessage('') }}><Search size={16} /> Customer</button>
+          <button type="button" className={accountType === 'contractor' ? 'active' : ''} onClick={() => { setAccountType('contractor'); setError(''); setMessage('') }}><HardHat size={16} /> Contractor</button>
+        </div>
         <div className="auth-switch"><button type="button" className={mode === 'signin' ? 'active' : ''} onClick={() => { setMode('signin'); setError(''); setMessage('') }}>Sign in</button><button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); setMessage('') }}>Create profile</button></div>
-        <h2>{mode === 'signin' ? 'Welcome back.' : 'Start your profile.'}</h2>
-        {mode === 'signup' && <><label>Business or full name<input required minLength={2} maxLength={120} value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label><label>Service location<input maxLength={160} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, state" /></label></>}
+        <h2>{mode === 'signin' ? `Welcome back, ${accountType === 'customer' ? 'customer' : 'contractor'}.` : accountType === 'customer' ? 'Create your customer account.' : 'Start your contractor profile.'}</h2>
+        {mode === 'signup' && (accountType === 'contractor'
+          ? <><label>Business or full name<input required minLength={2} maxLength={120} value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label><label>Service location<input maxLength={160} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Pune, Maharashtra" /></label></>
+          : <label>Your name<input required minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} /></label>)}
         <label>Email address<input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label>Password<input required type="password" minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         {error && <Notice kind="error">{error}</Notice>}{message && <Notice kind="success">{message}</Notice>}
-        <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'} <ArrowRight size={16} /></button>
+        <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? `Log in as ${accountType}` : 'Create account'} <ArrowRight size={16} /></button>
         {import.meta.env.DEV && <p className="mono-note demo-login">SEE README FOR LOCAL DEMO ACCOUNTS</p>}
       </form>
     </div>
@@ -735,7 +1071,7 @@ function ProjectCard({ project, editable }: { project: PortfolioProject; editabl
   const image = projectImageUrl(project.image_path)
   const value = project.project_value === null
     ? null
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(project.project_value)
+    : formatRupees(project.project_value)
   return (
     <article className="project-card">
       {image && <img src={image} alt={`${project.title} project`} className="project-image" />}
@@ -769,7 +1105,7 @@ function NotFound() {
 
 function formatDate(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(date)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date)
 }
 
 export default App

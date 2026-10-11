@@ -12,6 +12,7 @@ export interface Contractor {
   service_location_version: number
   created_at: string
   updated_at: string
+  featured_image_path: string | null
 }
 
 export interface ContractorContact {
@@ -95,4 +96,47 @@ export interface ProjectInput {
   location: string
   image_path: string | null
   project_value: number | null
+}
+
+export type QuoteStatus = 'new' | 'quoted' | 'declined'
+
+export interface QuoteRequest {
+  id: string
+  contractor_id: string
+  contractor_name?: string
+  customer_name: string
+  customer_email: string
+  customer_phone: string
+  project_type: string
+  project_location: string
+  project_description: string
+  budget_range: string
+  timeline: string
+  status: QuoteStatus
+  quote_amount: number | null
+  quote_message: string
+  project_image_paths: string[]
+  project_images?: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type AccountType = 'customer' | 'contractor'
+
+export interface CustomerQuote {
+  id: string
+  contractor_id: string
+  contractor_name: string
+  project_type: string
+  project_location: string
+  project_description: string
+  budget_range: string
+  timeline: string
+  status: QuoteStatus
+  quote_amount: number | null
+  quote_message: string
+  project_image_paths: string[]
+  project_images?: string[]
+  created_at: string
+  updated_at: string
 }

@@ -4,7 +4,11 @@ import type {
   Contractor,
   ContractorContact,
   ContractorDetail,
+  CustomerQuote,
+  AccountType,
   ProjectInput,
+  QuoteRequest,
+  QuoteStatus,
   RpcResult,
 } from '../types'
 
@@ -35,13 +39,14 @@ export async function listContractors(filters: {
     if (error) throw new Error(error.message)
     constraints.push([...new Set((data ?? []).map((row) => row.contractor_id))])
   }
+
   if (filters.availability) {
     const { data, error } = await db.from('contractor_availability')
       .select('contractor_id').eq('status', filters.availability).returns<{ contractor_id: string }[]>()
     if (error) throw new Error(error.message)
     constraints.push([...new Set((data ?? []).map((row) => row.contractor_id))])
   }
-  const narrowedIds = constraints.reduce((ids, next) => ids.filter((id) => next.includes(id)))
+  const narrowedIds = constraints.reduce((ids, next) => ids.filter((id) => next.includes(id)), constraints[0] ?? [])
   if (constraints.length > 0 && narrowedIds.length === 0) return []
 
   let query = db.from('contractor_listings').select('*').order('updated_at', { ascending: false })
@@ -50,6 +55,125 @@ export async function listContractors(filters: {
   const { data, error } = await query.returns<Contractor[]>()
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+export async function submitQuoteRequest(input: {
+  contractorId: string
+  accessToken: string
+  customerId: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  projectType: string
+  projectLocation: string
+  projectDescription: string
+  budgetRange: string
+  timeline: string
+  projectImagePaths: string[]
+}): Promise<void> {
+  const { error } = await client().rpc('submit_quote_request', {
+    p_contractor_id: input.contractorId,
+    p_access_token: input.accessToken,
+    p_customer_id: input.customerId,
+    p_customer_name: input.customerName.trim(),
+    p_customer_email: input.customerEmail.trim(),
+    p_customer_phone: input.customerPhone.trim(),
+    p_project_type: input.projectType.trim(),
+    p_project_location: input.projectLocation.trim(),
+    p_project_description: input.projectDescription.trim(),
+    p_budget_range: input.budgetRange,
+    p_timeline: input.timeline,
+    p_project_image_paths: input.projectImagePaths,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function getCustomerQuote(accessToken: string): Promise<CustomerQuote> {
+  const { data, error } = await client().rpc('get_customer_quote', { p_access_token: accessToken })
+  if (error) throw new Error(error.message)
+  const request = (data as CustomerQuote[] | null)?.[0]
+  if (!request) throw new Error('This quote link is invalid or has expired.')
+  return (await addQuoteImageUrls([request]))[0]
+}
+
+export async function listContractorQuotes(contractorId: string): Promise<QuoteRequest[]> {
+  const { data, error } = await client().rpc('list_contractor_quotes', { p_contractor_id: contractorId })
+  if (error) throw new Error(error.message)
+  return addQuoteImageUrls((data as QuoteRequest[] | null) ?? [])
+}
+
+export async function listMyQuoteRequests(): Promise<CustomerQuote[]> {
+  const { data, error } = await client().rpc('list_my_quote_requests')
+  if (error) throw new Error(error.message)
+  return addQuoteImageUrls((data as CustomerQuote[] | null) ?? [])
+}
+
+async function addQuoteImageUrls<T extends { project_image_paths: string[] }>(requests: T[]): Promise<T[]> {
+  if (!requests.some((request) => request.project_image_paths?.length)) return requests
+  const db = client()
+  return Promise.all(requests.map(async (request) => {
+    const paths = request.project_image_paths ?? []
+    if (!paths.length) return { ...request, project_images: [] }
+    const { data, error } = await db.storage.from('quote-images').createSignedUrls(paths, 3600)
+    if (error) throw new Error(`Quote images could not be loaded: ${error.message}`)
+    const failedImage = data?.find((item) => item.error || !item.signedUrl)
+    if (failedImage) throw new Error(`A quote photo could not be loaded: ${failedImage.error ?? 'signed URL missing'}`)
+    return { ...request, project_images: (data ?? []).map((item) => item.signedUrl).filter((url): url is string => Boolean(url)) }
+  }))
+}
+
+export async function uploadQuoteImages(customerId: string, files: File[]): Promise<string[]> {
+  const db = client()
+  const uploaded: string[] = []
+  try {
+    for (const file of files) {
+      const extension = file.name.split('.').pop()?.toLowerCase() ?? 'img'
+      const path = `${customerId}/${crypto.randomUUID()}.${extension}`
+      const { error } = await db.storage.from('quote-images').upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      })
+      if (error) throw new Error(error.message)
+      uploaded.push(path)
+    }
+    return uploaded
+  } catch (error) {
+    if (uploaded.length) {
+      const { error: cleanupError } = await db.storage.from('quote-images').remove(uploaded)
+      if (cleanupError) throw new Error(`Quote image upload failed, and uploaded images could not be cleaned up: ${cleanupError.message}`)
+    }
+    throw error
+  }
+}
+
+export async function removeQuoteImages(paths: string[]): Promise<void> {
+  if (!paths.length) return
+  const { error } = await client().storage.from('quote-images').remove(paths)
+  if (error) throw new Error(error.message)
+}
+
+export async function getMyAccountType(): Promise<AccountType> {
+  const { data, error } = await client().rpc('get_my_account_type')
+  if (error) throw new Error(error.message)
+  if (data !== 'customer' && data !== 'contractor') throw new Error('Your account type could not be verified.')
+  return data
+}
+
+export async function saveContractorQuote(input: {
+  requestId: string
+  status: Exclude<QuoteStatus, 'new'>
+  amount: number | null
+  message: string
+}): Promise<void> {
+  const { data, error } = await client().rpc('respond_to_quote_request', {
+    p_request_id: input.requestId,
+    p_status: input.status,
+    p_quote_amount: input.amount,
+    p_quote_message: input.message.trim(),
+  })
+  const result = assertRpcSuccess(data, error)
+  if (result.status !== 'ok') throw new Error('The quotation could not be saved.')
 }
 
 export async function getContractor(id: string, includePrivate = false): Promise<ContractorDetail> {
@@ -222,10 +346,12 @@ export async function uploadProjectImage(contractorId: string, file: File): Prom
 
 export function projectImageUrl(imagePath: string | null): string | null {
   if (!imagePath || !supabase) return null
+  if (/^https?:\/\//i.test(imagePath)) return imagePath
   return supabase.storage.from('portfolio-images').getPublicUrl(imagePath).data.publicUrl
 }
 
 export async function removeProjectImage(imagePath: string): Promise<void> {
+  if (/^https?:\/\//i.test(imagePath)) return
   const { error } = await client().storage.from('portfolio-images').remove([imagePath])
   if (error) throw new Error(error.message)
 }
