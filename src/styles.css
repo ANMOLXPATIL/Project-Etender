@@ -312,37 +312,53 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .auth-page { grid-template-columns: 1fr 350px; gap: 35px; }
   .site-footer { padding-inline: 24px; }
 }
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 32px; }
+  .hero-copy { max-width: 620px; }
+  .hero-visual { height: min(62vw, 440px); min-height: 320px; }
+  .auth-page { grid-template-columns: 1fr; gap: 28px; }
+  .auth-copy, .auth-form { width: min(100%, 560px); }
+  .auth-form { justify-self: center; }
+}
 @media (max-width: 640px) {
-  .site-header { min-height: 66px; padding-inline: 15px; }
+  .site-header {
+    display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand account" "nav nav"; row-gap: 2px; padding: 8px 16px 5px;
+  }
+  .site-header > .brand { grid-area: brand; }
+  .site-header > .main-nav { grid-area: nav; justify-content: flex-start; }
+  .site-header > .header-account { grid-area: account; }
   .brand { gap: 7px; font-size: 10px; }
   .brand-mark { width: 31px; height: 31px; border-radius: 10px; }
-  .main-nav { gap: 0; }
-  .main-nav a { max-width: 105px; font-size: 8px; line-height: 1.35; }
+  .main-nav { gap: 0; font-size: 9px; }
+  .main-nav a { min-height: 34px; max-width: none; font-size: 9px; line-height: 1.35; }
   .header-account { gap: 5px; }
   .signed-in { display: none; }
-  .nav-signin { max-width: 116px; padding: 0 10px; font-size: 8px; line-height: 1.3; }
-  .page-wrap { width: calc(100% - 34px); }
-  .hero { grid-template-columns: 1fr; gap: 33px; padding-block: 39px 58px; }
+  .nav-signin { min-height: 42px; max-width: none; padding: 0 11px; font-size: 9px; line-height: 1.3; }
+  .page-wrap { width: calc(100% - 32px); }
+  .hero { grid-template-columns: 1fr; gap: 30px; padding-block: 34px 51px; }
   .hero-copy { padding: 0; }
   .hero-kicker { margin-bottom: 19px; }
-  .hero h1 { font-size: clamp(48px, 12vw, 68px); }
+  .hero h1 { font-size: clamp(44px, 11vw, 62px); }
   .hero-description { max-width: 420px; margin: 17px 0 20px; font-size: 15px; }
   .hero-proof { margin-top: 24px; padding-top: 15px; }
-  .hero-visual { height: 360px; margin-right: 9px; }
+  .hero-visual { height: clamp(255px, 75vw, 350px); min-height: 0; margin-right: 8px; }
   .hero-visual::before { top: -10px; right: -9px; border-radius: 20px; }
   .hero-visual > img { border-radius: 20px; }
   .hero-floating-card { right: 10px; bottom: -22px; min-width: min(320px, calc(100% - 20px)); padding: 11px; }
   .floating-card-icon { width: 38px; height: 38px; }
   .directory-section { padding-block: 51px 66px; }
-  .section-heading { align-items: end; gap: 10px; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
   .section-heading h2, .update-callout h2 { font-size: 37px; }
   .section-intro { max-width: 330px; font-size: 12px; }
   .result-count { padding: 7px 8px; font-size: 8px; }
-  .search-panel { gap: 12px 9px; padding: 12px; }
+  .search-panel { grid-template-columns: 1fr; gap: 12px; padding: 13px; }
   .search-field > span:first-child { font-size: 8px; }
-  .search-field input, .search-field select { height: 43px; padding-inline: 9px; font-size: 11px; }
+  .search-field input, .search-field select { height: 48px; padding-inline: 11px; font-size: 16px; }
   .contractor-grid { grid-template-columns: 1fr; gap: 12px; padding-top: 14px; }
   .contractor-card { min-height: 268px; padding: 19px; }
+  .contractor-card h3 { font-size: 25px; }
+  .card-description { font-size: 14px; }
   .black-band-inner { padding-block: 58px 62px; }
   .black-band h2 { font-size: clamp(43px, 11vw, 61px); }
   .update-callout { grid-template-columns: 4px 1fr; gap: 15px; padding-block: 60px; }
@@ -352,8 +368,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .detail-page, .manage-page { padding-block: 20px 55px; }
   .detail-header { align-items: flex-start; flex-direction: column; margin-block: 18px 25px; padding: 21px; }
   .detail-header h1 { font-size: clamp(38px, 10vw, 52px); }
+  .profile-actions { width: 100%; }
+  .profile-actions .button { flex: 1; }
   .detail-grid { grid-template-columns: 1fr; gap: 28px; }
   .detail-aside { padding-inline: 16px; }
+  .project-card-top, .project-card-bottom { flex-wrap: wrap; }
   .manage-header { grid-template-columns: 1fr; gap: 20px; padding-block: 20px 23px; }
   .manage-header h1 { font-size: clamp(49px, 12vw, 62px); }
   .version-card { grid-template-columns: auto 1fr; align-items: center; }
@@ -365,6 +384,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .editor-grid { grid-template-columns: 1fr; gap: 12px; }
   .editor-card-wide { grid-column: auto; }
   .editor-card { padding: 16px; }
+  .editor-fields input, .editor-fields textarea, .editor-fields select,
+  .project-fields input, .project-fields textarea, .project-fields select, .auth-form input { font-size: 16px; }
   .project-fields { grid-template-columns: 1fr; }
   .project-fields > label:nth-child(3), .project-fields > label:nth-child(6) { grid-column: auto; }
   .form-pair { grid-template-columns: 1fr; }
@@ -383,9 +404,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .auth-page { min-height: auto; grid-template-columns: 1fr; gap: 25px; padding-block: 40px 55px; }
   .auth-copy h1 { font-size: 54px; }
   .auth-form { padding: 18px; }
-  .setup-card { padding: 24px; }
-  .setup-card h1 { font-size: 49px; }
+  .setup-screen { padding: 16px; }
+  .setup-card { padding: 21px; }
+  .setup-card h1 { font-size: clamp(40px, 12vw, 49px); }
   .site-footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 5px; padding: 14px 17px; font-size: 8px; }
+}
+@media (max-width: 380px) {
+  .site-header { padding-inline: 12px; }
+  .page-wrap { width: calc(100% - 26px); }
+  .brand { font-size: 9px; }
+  .nav-signin { gap: 5px; padding-inline: 8px; font-size: 8px; }
+  .hero-actions { align-items: stretch; flex-direction: column; gap: 15px; }
+  .hero-actions .button { width: 100%; }
+  .hero-secondary-link { justify-content: center; min-height: 42px; }
+  .contractor-card { padding: 16px; }
+  .detail-header { padding: 17px; }
+  .profile-actions { flex-direction: column; }
+  .profile-actions .button { width: 100%; }
+  .skill-editor-row { flex-wrap: wrap; }
+  .skill-editor-row input { flex-basis: 100%; }
+  .manage-project-row { flex-direction: column; }
+  .row-actions { flex-direction: row; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
