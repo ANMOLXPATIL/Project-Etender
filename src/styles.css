@@ -426,6 +426,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .hero-kicker { margin-bottom: 19px; }
   .hero h1 { font-size: clamp(44px, 11vw, 62px); }
   .hero-description { max-width: 420px; margin: 17px 0 20px; font-size: 15px; }
+  .hero-actions { align-items: center; justify-content: flex-start; }
   .hero-proof { margin-top: 24px; padding-top: 15px; }
   .hero-visual { height: clamp(255px, 75vw, 350px); min-height: 0; margin-right: 8px; }
   .hero-visual::before { top: -10px; right: -9px; border-radius: 20px; }
