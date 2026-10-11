@@ -1,4 +1,4 @@
-# Groundwork — e-tender contractor directory
+# Groundwork e-tender contractor directory
 
 Groundwork is a React + TypeScript contractor directory and profile manager using Supabase Cloud for authentication, PostgreSQL, image storage, and realtime updates. The app does not use mock data or local persistence for contractor records.
 
